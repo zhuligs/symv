@@ -1,36 +1,5 @@
+/* site_symmetry.c */
 /* Copyright (C) 2011 Atsushi Togo */
-/* All rights reserved. */
-
-/* This file is part of spglib. */
-
-/* Redistribution and use in source and binary forms, with or without */
-/* modification, are permitted provided that the following conditions */
-/* are met: */
-
-/* * Redistributions of source code must retain the above copyright */
-/*   notice, this list of conditions and the following disclaimer. */
-
-/* * Redistributions in binary form must reproduce the above copyright */
-/*   notice, this list of conditions and the following disclaimer in */
-/*   the documentation and/or other materials provided with the */
-/*   distribution. */
-
-/* * Neither the name of the phonopy project nor the names of its */
-/*   contributors may be used to endorse or promote products derived */
-/*   from this software without specific prior written permission. */
-
-/* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS */
-/* "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT */
-/* LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS */
-/* FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE */
-/* COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, */
-/* INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, */
-/* BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; */
-/* LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER */
-/* CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT */
-/* LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN */
-/* ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE */
-/* POSSIBILITY OF SUCH DAMAGE. */
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -57,7 +26,7 @@ static int get_Wyckoff_notation(double position[3],
 				const int hall_number,
 				const double symprec);
 
-/* Return if failed */
+
 VecDBL * ssm_get_exact_positions(int *wyckoffs,
 				 int *equiv_atoms,
 				 SPGCONST Cell * bravais,
@@ -73,7 +42,6 @@ VecDBL * ssm_get_exact_positions(int *wyckoffs,
 			     symprec);
 }
 
-/* Return NULL if failed */
 static VecDBL * get_exact_positions(int * wyckoffs,
 				    int * equiv_atoms,
 				    SPGCONST Cell * bravais,
@@ -86,22 +54,10 @@ static VecDBL * get_exact_positions(int * wyckoffs,
   int *indep_atoms;
   VecDBL *positions;
 
-  debug_print("get_exact_positions\n");
+  debug_print("get_symmetrized_positions\n");
 
-  indep_atoms = NULL;
-  positions = NULL;
-
-  if ((indep_atoms = (int*) malloc(sizeof(int) * bravais->size)) == NULL) {
-    warning_print("spglib: Memory could not be allocated ");
-    return NULL;
-  }
-
-  if ((positions = mat_alloc_VecDBL(bravais->size)) == NULL) {
-    free(indep_atoms);
-    indep_atoms = NULL;
-    return NULL;
-  }
-
+  indep_atoms = (int*) malloc(sizeof(int) * bravais->size);
+  positions = mat_alloc_VecDBL(bravais->size);
   num_indep_atoms = 0;
 
   for (i = 0; i < bravais->size; i++) {
@@ -120,8 +76,9 @@ static VecDBL * get_exact_positions(int * wyckoffs,
 			   symprec)) {
 	  /* Equivalent atom was found. */
 	  for (l = 0; l < 3; l++) {
-	    positions->vec[i][l] = mat_Dmod1(pos[l]);
+	    pos[l] -= mat_Nint(pos[l]);
 	  }
+	  mat_copy_vector_d3(positions->vec[i], pos);
 	  wyckoffs[i] = wyckoffs[indep_atoms[j]];
 	  equiv_atoms[i] = indep_atoms[j];
 	  goto escape;
@@ -150,14 +107,6 @@ static VecDBL * get_exact_positions(int * wyckoffs,
   free(indep_atoms);
   indep_atoms = NULL;
 
-  for (i = 0; i < bravais->size; i++) {
-    if (wyckoffs[i] == -1) {
-      mat_free_VecDBL(positions);
-      positions = NULL;
-      break;
-    }
-  }
-
   return positions;
 }
 
@@ -173,8 +122,6 @@ static void get_exact_location(double position[3],
   int i, j, k, num_sum;
   double sum_rot[3][3];
   double pos[3], sum_trans[3];
-
-  debug_print("get_exact_location\n");
 
   num_sum = 0;
   for (i = 0; i < 3; i++) {
@@ -226,28 +173,19 @@ static void get_exact_location(double position[3],
 
 }
 
-/* Return -1 if failed */
 static int get_Wyckoff_notation(double position[3],
 				SPGCONST Symmetry * conv_sym,
 				SPGCONST double bravais_lattice[3][3],
 				const int hall_number,
 				const double symprec)
 {
-  int i, j, k, l, at_orbit, num_sitesym, wyckoff_letter;
+  int i, j, k, l, at_orbit, num_sitesym, wyckoff_letter=-1;
   int indices_wyc[2];
   int rot[3][3];
   double trans[3], orbit[3];
   VecDBL *pos_rot;
 
-  debug_print("get_Wyckoff_notation\n");
-
-  wyckoff_letter = -1;
-  pos_rot = NULL;
-
-  if ((pos_rot = mat_alloc_VecDBL(conv_sym->size)) == NULL) {
-    return -1;
-  }
-
+  pos_rot = mat_alloc_VecDBL(conv_sym->size);
   for (i = 0; i < conv_sym->size; i++) {
     mat_multiply_matrix_vector_id3(pos_rot->vec[i], conv_sym->rot[i], position);
     for (j = 0; j < 3; j++) {
@@ -290,3 +228,4 @@ static int get_Wyckoff_notation(double position[3],
   mat_free_VecDBL(pos_rot);
   return wyckoff_letter;
 }
+

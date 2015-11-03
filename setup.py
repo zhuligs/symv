@@ -20,9 +20,6 @@ ext = Extension('libpyspg',
                             'c/spg_database.c',
                             'c/spglib.c',
                             'c/spin.c',
-                            'c/symmetry.c',
-                            'c/niggli.c',
-                            'c/hall_symbol.c',
-                            'c/tetrahedron_method.c'])
+                            'c/symmetry.c'])
 
-setup(name='libpyspg', version='1.8.2', description='This is libpyspg.', ext_modules=[ext])
+setup(name='libpyspg', version='1.4.1', description='This is libpyspg.', ext_modules=[ext])
