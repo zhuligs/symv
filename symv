@@ -25,7 +25,7 @@
 #  ****************************************************************************/
 
 __version__ = "0.3"
-__author__ = "z@zhuli.name (Li Zhu)"
+__author__ = "Li Zhu z@zhuli.name"
 
 import os
 import sys
@@ -159,7 +159,9 @@ def readPos(inpos):
     lat = np.array(lat, float)
     try:
         typt = map(int, read_data[5].split())
+        symb = None
     except:
+        symb = read_data[5].split()
         del(read_data[5])
         typt = map(int, read_data[5].split())
     natom = sum(typt)
@@ -167,7 +169,7 @@ def readPos(inpos):
     for item in read_data[7 : 7+natom]:
         pos.append(map(float, item.split()[:3]))
     pos = np.array(pos, float)
-    return (lat, pos, typt, natom)
+    return (lat, pos, typt, natom, symb)
 
 def deter_nsp(ns):
     fa = os.popen('factor ' + str(ns)).read().split()[1:]
@@ -207,7 +209,25 @@ def creat_supercell(cell, ns):
     natom = len(spos)
     
     return (slat, sspos, stypt, natom)
-    
+
+def write_vasp(posname, cell, symb, spgdata):
+    with open(posname, 'w') as f:
+        f.write(posname + ' ' + str(spgdata[0]) + ' ' + str(spgdata[1]) + '\n')
+        f.write('1.0\n')
+        for x in cell[0]:
+            f.write("%15.9f %15.9f %15.9f\n" % tuple(x))
+        if symb is not None:
+            for x in symb:
+                f.write(x)
+            f.write('\n')
+        for x in cell[2]:
+            f.write("%4d" % x)
+        f.write("\n")
+        f.write("Direct\n")
+        for x in cell[1]:
+            f.write("%15.9f %15.9f %15.9f\n" % tuple(x))
+    return
+
     
 def run():
     """docstring for run"""
@@ -230,24 +250,15 @@ def run():
     
     cell = readPos(inpos)
     natom0 = cell[3]
-    (spgdata, recell, primcell) = findsym(cell, prec, is_refine, is_prim)
+    symb = cell[4]
+    (spgdata, recell, primcell) = findsym(cell[:4], prec, is_refine, is_prim)
     print spgdata[0], spgdata[1]
     
-    # natom1 = recell[3]
-    # natom2 = primcell[3]
-    # 
-    # if natom1 == natom0:
-    #     outcell = recell
-    # elif natom2 == natom0:
-    #     outcell = primcell
-    # else:
-    #     ns = natom0 / natom1
-    #     outcell = creat_supercell(recell, ns)
-        
-    # print recell
-    # print primcell
-    # print outcell
-    
+    if is_refine:
+        write_vasp('UPOSCAR', recell, symb, spgdata)
+        if is_prim:
+            write_vasp('PPOSCAR', primcell, symb, spgdata)
+
 
 if __name__ == '__main__':
     run()
