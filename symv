@@ -1,0 +1,253 @@
+#!/usr/bin/python 
+# -*- coding: utf8 -*-
+
+# ******************************************************************************
+#  Copyright (C) 2015 Li Zhu 
+#  All rights reserved. 
+# 
+#  Permission is hereby granted, free of charge, to any person obtaining a copy
+#  of this software and associated documentation files (the "Software"), to deal
+#  in the Software without restriction, including without limitation the rights
+#  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+#  copies of the Software, and to permit persons to whom the Software is
+#  furnished to do so, subject to the following conditions:
+#  
+#  The above copyright notice and this permission notice shall be included in
+#  all copies or substantial portions of the Software.
+#  
+#  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+#  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+#  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+#  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+#  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+#  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+#  THE SOFTWARE.
+#  ****************************************************************************/
+
+__version__ = "0.3"
+__author__ = "z@zhuli.name (Li Zhu)"
+
+import os
+import sys
+from optparse import OptionParser
+
+try:
+    import libpyspg as spg
+except:
+    print "SPG ERROR"
+    exit(0)
+    
+try:
+    import numpy as np
+except:
+    print "NP ERROR"
+    exit(0)
+
+def findsym(cell, prec, is_refine, is_prim):
+    '''
+    cell[ lattice,
+          positions,
+          typt,
+          num_atoms
+    ]
+    '''
+    
+    aprec = -1
+    
+    sl = cell[0].T.copy()
+    sp = cell[1].copy()
+    stypt = cell[2][:]
+    num_atoms = cell[3]
+
+    snumbers = []
+    for i in range(len(stypt)):
+        snumbers += [i+1] * stypt[i]
+    snumbers = np.array(snumbers, int)
+
+    l = sl[:]
+    p = sp[:]
+    typt = stypt[:]
+    numbers = snumbers[:]
+
+    (num_spg, symbol_spg) = spg.spacegroup(l, p, numbers, prec, aprec)
+    if num_spg == 0:
+        symbol_spg = 'NULL'
+    else:
+        symbol_spg = symbol_spg.strip()
+
+    if is_refine:
+        pp = np.zeros((num_atoms*4, 3), float)
+        numn = np.array([0]*(num_atoms*4), int)
+
+        for i in range(0, num_atoms):
+            pp[i] = p[i]
+            numn[i] = numbers[i]
+
+        num_atoms_brv = spg.refine_cell(l, pp, numn, num_atoms, prec, aprec)
+
+        refine_lat = l.T.copy()
+        refine_pos = [] 
+        refine_numbers = []
+        refine_typt = []
+
+
+        for inums in set(numbers):
+            itypt = 0
+            for i in range(num_atoms_brv):
+                if inums == numn[i]:
+                    refine_pos.append(pp[i])
+                    refine_numbers.append(numn[i])
+                    itypt += 1
+            refine_typt.append(itypt)
+
+
+        refine_pos = np.array(refine_pos, float)
+        refine_numbers = np.array(refine_numbers, int)
+    else:
+        refine_lat = None
+        refine_pos = None
+        refine_typt = None
+        num_atoms_brv = None
+        refine_numbers = None
+
+    if is_prim and refine_lat is not None:
+        p_l = refine_lat.T.copy()
+        p_p = refine_pos.copy()
+        p_typt = refine_typt[:]
+        p_numbers = refine_numbers[:]
+        num_atom_prim = spg.primitive(p_l, p_p, p_numbers, 1e-5, -1)
+        if num_atom_prim > 0:
+            prim_lat = p_l.T.copy()
+            prim_positions = p_p[:num_atom_prim]
+            prim_numbers = p_numbers[:num_atom_prim]
+            prim_typt = []
+            for inums in set(prim_numbers):
+                itypt = 0
+                for i in range(num_atom_prim):
+                    if inums == prim_numbers[i]:
+                        itypt += 1
+                prim_typt.append(itypt)
+        else:
+            prim_lat = None
+            prim_positions = None
+            prim_numbers = None
+            prim_typt = None
+            num_atom_prim = None
+    else:
+        prim_lat = None
+        prim_positions = None
+        prim_numbers = None
+        prim_typt = None
+        num_atom_prim = None
+    
+    return ((num_spg, symbol_spg),
+            (refine_lat, refine_pos, refine_typt, num_atoms_brv, refine_numbers),
+            (prim_lat, prim_positions, prim_typt, num_atom_prim))
+
+def readPos(inpos):
+    """docstring for readPos"""
+    read_data = []
+    f = open(inpos)
+    try:
+        for line in f:
+            read_data.append(line)
+    finally:
+        f.close()
+    lat = []
+    for i in range(2, 5):
+        lat.append(map(float, read_data[i].split()))
+    lat = np.array(lat, float)
+    try:
+        typt = map(int, read_data[5].split())
+    except:
+        del(read_data[5])
+        typt = map(int, read_data[5].split())
+    natom = sum(typt)
+    pos = []
+    for item in read_data[7 : 7+natom]:
+        pos.append(map(float, item.split()[:3]))
+    pos = np.array(pos, float)
+    return (lat, pos, typt, natom)
+
+def deter_nsp(ns):
+    fa = os.popen('factor ' + str(ns)).read().split()[1:]
+    fac = map(int, fa)
+    if len(fac) == 1:
+        fact = [fac[0], 1, 1]
+    elif len(fac) == 2:
+        fact = [fac[0], fac[1], 1]
+    elif len(fac) == 3:
+        fact = fac[:]
+    elif len(fac) == 4:
+        fact = [fac[0]*fac[1], fac[2], fac[3]]
+    elif len(fac) == 5:
+        fact = [fac[0]*fac[1], fac[2]*fac[3], fac[4]]
+    elif len(fac) == 6:
+        fact = [fac[0]*fac[1], fac[2]*fac[3], fac[4]*fac[5]]
+    return fact
+    
+def creat_supercell(cell, ns):
+    nsp = deter_nsp(ns)
+    ulat = cell[0].copy()
+    upos = cell[1].copy()
+    utypt = np.array(cell[2][:])
+    
+    spos = []
+    for l, p in enumerate(upos):
+        for i in range(nsp[0]):
+            for j in range(nsp[1]):
+                for k in range(nsp[2]):
+                    spos.append([ (p[0] + i) / nsp[0],
+                                  (p[1] + j) / nsp[1],
+                                  (p[2] + k) / nsp[2] ])
+    sspos = np.array(spos, float)
+    slat = np.dot( np.diag( np.array(nsp) ), ulat )
+    stypt = utypt * sum(nsp)
+    
+    natom = len(spos)
+    
+    return (slat, sspos, stypt, natom)
+    
+    
+def run():
+    """docstring for run"""
+    parser = OptionParser()
+    parser.set_defaults( prec = 0.01, is_refine = False, is_prim = False)
+    parser.add_option("-t", "--tolerance", dest="prec", type="float")
+    parser.add_option("-r", "--refine", dest="is_refine", action="store_true")
+    parser.add_option("-p", "--primitive", dest="is_prim", action="store_true")
+    
+    (options, args) = parser.parse_args()
+    # print len(args)
+    if len(args) == 0 :
+        inpos = 'POSCAR'
+    else:
+        inpos = args[0]
+    
+    prec = options.prec
+    is_refine = options.is_refine
+    is_prim = options.is_prim
+    
+    cell = readPos(inpos)
+    natom0 = cell[3]
+    (spgdata, recell, primcell) = findsym(cell, prec, is_refine, is_prim)
+    print spgdata[0], spgdata[1]
+    
+    # natom1 = recell[3]
+    # natom2 = primcell[3]
+    # 
+    # if natom1 == natom0:
+    #     outcell = recell
+    # elif natom2 == natom0:
+    #     outcell = primcell
+    # else:
+    #     ns = natom0 / natom1
+    #     outcell = creat_supercell(recell, ns)
+        
+    # print recell
+    # print primcell
+    # print outcell
+    
+
+if __name__ == '__main__':
+    run()
