@@ -261,8 +261,6 @@ def run():
             if primcell[0] is not None:
                 write_vasp('PPOSCAR', primcell, symb, spgdata)
                 print 'Refined primitive cell is written into PPOSCAR.'
-            else:
-                print 'No primitive cell.'
 
 
 if __name__ == '__main__':
