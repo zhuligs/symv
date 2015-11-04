@@ -232,7 +232,7 @@ def write_vasp(posname, cell, symb, spgdata):
 def run():
     """docstring for run"""
     parser = OptionParser()
-    parser.set_defaults( prec = 0.01, is_refine = False, is_prim = False)
+    parser.set_defaults( prec = 0.001, is_refine = False, is_prim = False)
     parser.add_option("-t", "--tolerance", dest="prec", type="float")
     parser.add_option("-r", "--refine", dest="is_refine", action="store_true")
     parser.add_option("-p", "--primitive", dest="is_prim", action="store_true")
@@ -256,8 +256,13 @@ def run():
     
     if is_refine:
         write_vasp('UPOSCAR', recell, symb, spgdata)
+        print 'Refined unit cell is written into UPOSCAR.'
         if is_prim:
-            write_vasp('PPOSCAR', primcell, symb, spgdata)
+            if primcell[0] is not None:
+                write_vasp('PPOSCAR', primcell, symb, spgdata)
+                print 'Refined primitive cell is written into PPOSCAR.'
+            else:
+                print 'No primitive cell.'
 
 
 if __name__ == '__main__':
