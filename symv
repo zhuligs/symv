@@ -218,7 +218,7 @@ def write_vasp(posname, cell, symb, spgdata):
             f.write("%15.9f %15.9f %15.9f\n" % tuple(x))
         if symb is not None:
             for x in symb:
-                f.write(x)
+                f.write(x+'  ')
             f.write('\n')
         for x in cell[2]:
             f.write("%4d" % x)
